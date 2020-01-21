@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -33,4 +34,14 @@ func main() {
 
 	conn := connect()
 	defer conn.Close()
+
+	for i := 0; i < 20; i++ {
+		msg := []byte(fmt.Sprintf("msg %d", i))
+		err := conn.WriteMessage(websocket.TextMessage, msg)
+		if err != nil {
+			fmt.Println("ERROR write:", err)
+		}
+
+		time.Sleep(time.Millisecond * 100)
+	}
 }
