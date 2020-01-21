@@ -14,6 +14,9 @@ var (
 
 func main() {
 	// start server
+	flag.Parse()
+	log.SetFlags(0)
+
 	addr := fmt.Sprintf("%s:%s", *host, *port)
 	log.Printf("Listening on %s", addr)
 	log.Fatal(http.ListenAndServe(addr, nil))
