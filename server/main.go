@@ -28,12 +28,15 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 	for {
 		mt, msg, err := conn.ReadMessage()
-		if err != nil && !websocket.IsCloseError(err) {
+		if err != nil {
 			if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
 				log.Printf("Disconnect: %s", r.RemoteAddr)
 				conn.WriteMessage(mt, msg)
 				return
-			} else if !websocket.IsUnexpectedCloseError(err) {
+			} else if websocket.IsUnexpectedCloseError(err) {
+				log.Printf("Disconnect: %s", r.RemoteAddr)
+				return
+			} else {
 				log.Println("ERROR read:", err)
 				break
 			}
