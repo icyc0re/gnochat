@@ -11,10 +11,3 @@
     <input type="value" placeholder="username" bind:value={username}>
     <button>JOIN!</button>
 </form>
-
-<style>
-	h2 {
-		color: blue;
-		font-weight: bold;
-    }
-</style>
