@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/websocket"
 )
@@ -29,6 +30,10 @@ func closeConnection(conn *websocket.Conn) {
 	delete(clients, conn)
 }
 
+func validUsername(username string) bool {
+	return !strings.Contains(username, ":")
+}
+
 func handleConnections(w http.ResponseWriter, r *http.Request) {
 	log.Printf("New connection: %s", r.RemoteAddr)
 
@@ -47,7 +52,14 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	clients[conn] = string(msg)
+	// check validity of username
+	if username := string(msg); !validUsername(username) {
+		log.Println("ERROR: invalid username!")
+		return
+	} else {
+		clients[conn] = username
+	}
+
 
 	for {
 		mt, msg, err := conn.ReadMessage()
