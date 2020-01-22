@@ -96,9 +96,10 @@ func main() {
 		AddItem(mainView, 0, 1, false).
 		AddItem(prompt, 1, 1, true)
 	prompt.SetText("").SetLabel("> ").
+		SetAcceptanceFunc(func (_ string, _ rune) bool { return true }).
 		SetDoneFunc(func (key tcell.Key) {
 			if text := prompt.GetText(); key == tcell.KeyEnter && !isEmptyString(text) {
-				if text == ":quit" {
+				if text == "/quit" {
 					app.Stop()
 				} else {
 					outChan <- text
