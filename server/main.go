@@ -40,7 +40,14 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 	defer closeConnection(conn)
 
-	clients[conn] = "username"
+	// expect username as first message
+	mt, msg, err := conn.ReadMessage()
+	if err != nil || mt != websocket.TextMessage {
+		log.Println("ERROR, expected username as first message after connection!")
+		return
+	}
+	
+	clients[conn] = string(msg)
 
 	for {
 		mt, msg, err := conn.ReadMessage()
