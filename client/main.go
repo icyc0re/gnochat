@@ -1,16 +1,22 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gdamore/tcell"
 	"github.com/rivo/tview"
 )
+
+type SimpleMessage struct {
+	UserID UUID `json:"uuid"`
+	Username string `json:"user"`
+	Text string `json:"text"`
+}
 
 const (
 	DISCONNECT_TIMEOUT = time.Second * 2
@@ -31,28 +37,24 @@ func splitFirst(text, separator string) (string, string) {
 }
 
 func viewUpdater(ch chan string, msgView *tview.TextView, app *tview.Application) {
+	decodedMessage := new(SimpleMessage)
+
 	for {
-		msg := <-ch
+		msgData := []byte(<-ch)
 
-		senderIdString, msg := splitFirst(msg, ":")
-		sender, msg := splitFirst(msg, ":")
-
-		currentUser := false
-		if senderId, err := strconv.ParseInt(senderIdString, 10, 64); err != nil {
+		if err := json.Unmarshal(msgData, decodedMessage); err != nil {
 			break
-		} else {
-			currentUser = UUID(senderId) == userId
 		}
 
 		// if message from current user:
-		if currentUser {
+		if decodedMessage.UserID == userId {
 			msgView.Write([]byte(COLOR_CURRENT_USER))
 		} else {
 			msgView.Write([]byte(COLOR_OTHER_USERS))
 		}
-		msgView.Write([]byte(tview.Escape(fmt.Sprintf("[%s] ", sender))))
+		msgView.Write([]byte(tview.Escape(fmt.Sprintf("[%s] ", decodedMessage.Username))))
 		msgView.Write([]byte("[white]"))
-		msgView.Write([]byte(tview.Escape(msg)))
+		msgView.Write([]byte(tview.Escape(decodedMessage.Text)))
 		msgView.Write([]byte("\n"))
 		app.Draw()
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -14,13 +15,10 @@ import (
 
 type UUID int64
 
-type Message struct {
-	uuid UUID
-	msg []byte
-}
-
-func (m *Message) Prepare() []byte {
-	return []byte(fmt.Sprintf("%d:%s:%s", m.uuid, clients[m.uuid].username, string(m.msg)))
+type SimpleMessage struct {
+	UserID UUID `json:"uuid"`
+	Username string `json:"user"`
+	Text string `json:"text"`
 }
 
 type UserData struct {
@@ -33,7 +31,7 @@ var (
 	port = flag.String("port", "5003", "port on which server listens to")
 	upgrader = websocket.Upgrader{} // default configuration
 	clients = make(map[UUID]UserData)
-	broadcastChan = make(chan Message, 100)
+	broadcastChan = make(chan SimpleMessage, 100)
 	maxId struct {
 		currentValue UUID
 		mux sync.Mutex
@@ -83,7 +81,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// answer with userId
-	err = conn.WriteMessage(websocket.TextMessage, []byte(strconv.Itoa(userId)))
+	err = conn.WriteMessage(websocket.TextMessage, []byte(strconv.FormatInt(int64(userId), 10)))
 	if err != nil {
 		log.Printf("ERROR sending userId to %s\n", username)
 		return
@@ -105,7 +103,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		broadcastChan <- Message{ userId, msg }
+		broadcastChan <- SimpleMessage{ userId, username, string(msg) }
 	}
 }
 
@@ -113,8 +111,16 @@ func broadcastMessages() {
 	for {
 		msg := <-broadcastChan
 
+		encodedMessage, err := json.Marshal(msg)
+		if err != nil {
+			log.Println("ERROR encoding message:", err)
+			break
+		}
+
+		log.Println(string(encodedMessage))
+
 		for _, clientData := range clients {
-			err := clientData.conn.WriteMessage(websocket.TextMessage, msg.Prepare())
+			err := clientData.conn.WriteMessage(websocket.TextMessage, encodedMessage)
 			if err != nil {
 				log.Println("ERROR write:", err)
 				break
