@@ -5,29 +5,47 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gorilla/websocket"
 )
 
+type UUID int64
+
 type Message struct {
-	conn *websocket.Conn
+	uuid UUID
 	msg []byte
+}
+
+func (m *Message) Prepare() []byte {
+	return []byte(fmt.Sprintf("%d:%s:%s", m.uuid, clients[m.uuid].username, string(m.msg)))
+}
+
+type UserData struct {
+	conn *websocket.Conn
+	username string
 }
 
 var (
 	host = flag.String("host", "localhost", "server hostname")
 	port = flag.String("port", "5003", "port on which server listens to")
 	upgrader = websocket.Upgrader{} // default configuration
-	clients = make(map[*websocket.Conn]string)
+	clients = make(map[UUID]UserData)
 	broadcastChan = make(chan Message, 100)
+	maxId struct {
+		currentValue UUID
+		mux sync.Mutex
+	}
 )
 
-func closeConnection(conn *websocket.Conn) {
-	conn.Close()
+func closeConnection(uuid UUID) {
+	user := clients[uuid]
+	user.conn.Close()
 
-	log.Printf("Disconnect: %s", clients[conn])
-	delete(clients, conn)
+	log.Printf("Disconnect: %s", user.username)
+	delete(clients, uuid)
 }
 
 func validUsername(username string) bool {
@@ -43,7 +61,12 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	defer closeConnection(conn)
+	maxId.mux.Lock()
+	maxId.currentValue++
+	userId := maxId.currentValue
+	maxId.mux.Unlock()
+
+	defer closeConnection(userId)
 
 	// expect username as first message
 	mt, msg, err := conn.ReadMessage()
@@ -53,13 +76,20 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	// check validity of username
-	if username := string(msg); !validUsername(username) {
+	username := string(msg)
+	if !validUsername(username) {
 		log.Println("ERROR: invalid username!")
 		return
-	} else {
-		clients[conn] = username
 	}
 
+	// answer with userId
+	err = conn.WriteMessage(websocket.TextMessage, []byte(strconv.Itoa(userId)))
+	if err != nil {
+		log.Printf("ERROR sending userId to %s\n", username)
+		return
+	}
+	
+	clients[userId] = UserData{ conn, username }
 
 	for {
 		mt, msg, err := conn.ReadMessage()
@@ -75,20 +105,16 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		broadcastChan <- Message{ conn, msg }
+		broadcastChan <- Message{ userId, msg }
 	}
-}
-
-func composeBroadcastMessage(message Message) []byte {
-	return []byte(fmt.Sprintf("%s:%s", clients[message.conn], string(message.msg)))
 }
 
 func broadcastMessages() {
 	for {
-		msg := composeBroadcastMessage(<-broadcastChan)
+		msg := <-broadcastChan
 
-		for client := range clients {
-			err := client.WriteMessage(websocket.TextMessage, msg)
+		for _, clientData := range clients {
+			err := clientData.conn.WriteMessage(websocket.TextMessage, msg.Prepare())
 			if err != nil {
 				log.Println("ERROR write:", err)
 				break

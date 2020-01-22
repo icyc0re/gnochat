@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,25 +22,37 @@ var (
 	host = flag.String("host", "localhost", "server hostname")
 	port = flag.String("port", "5003", "port on which server listens to")
 	username = "user0"
+	userId UUID = 0
 )
+
+func splitFirst(text, separator string) (string, string) {
+	content := strings.SplitN(text, separator, 2)
+	return content[0], content[1]
+}
 
 func viewUpdater(ch chan string, msgView *tview.TextView, app *tview.Application) {
 	for {
 		msg := <-ch
 
-		pos := strings.Index(msg, ":")
-		sender := msg[:pos]
-		text := msg[pos+1:]
+		senderIdString, msg := splitFirst(msg, ":")
+		sender, msg := splitFirst(msg, ":")
+
+		currentUser := false
+		if senderId, err := strconv.ParseInt(senderIdString, 10, 64); err != nil {
+			break
+		} else {
+			currentUser = UUID(senderId) == userId
+		}
 
 		// if message from current user:
-		if sender == username {
+		if currentUser {
 			msgView.Write([]byte(COLOR_CURRENT_USER))
 		} else {
 			msgView.Write([]byte(COLOR_OTHER_USERS))
 		}
 		msgView.Write([]byte(tview.Escape(fmt.Sprintf("[%s] ", sender))))
 		msgView.Write([]byte("[white]"))
-		msgView.Write([]byte(tview.Escape(text)))
+		msgView.Write([]byte(tview.Escape(msg)))
 		msgView.Write([]byte("\n"))
 		app.Draw()
 	}
@@ -81,13 +94,15 @@ func main() {
 
 	defer conn.Close()
 
+	if userId = InitialHandshake(conn, username); !ValidUUID(userId) {
+		return
+	}
+
 	outChan := make(chan string)
 	inChan := make(chan string)
 
 	go MessageSender(conn, outChan)
 	go MessageReceiver(conn, inChan)
-
-	outChan <- username
 
 	mainView := tview.NewTextView().
 		SetDynamicColors(true)

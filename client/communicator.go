@@ -4,10 +4,17 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
+
+type UUID int64
+
+func ValidUUID(id UUID) bool {
+	return id > 0
+}
 
 func Connect(host, port string) *websocket.Conn {
 	addr := fmt.Sprintf("%s:%s", host, port)
@@ -21,6 +28,24 @@ func Connect(host, port string) *websocket.Conn {
 	}
 
 	return conn
+}
+
+func InitialHandshake(conn *websocket.Conn, username string) UUID {
+
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(username)); err != nil {
+		log.Println("handshake write:", err)
+		return -1
+	}
+
+	if _, msg, err := conn.ReadMessage(); err != nil {
+		log.Println("handshake read:", err)
+	} else if userId, err := strconv.ParseInt(string(msg), 10, 64); err != nil {
+		log.Println("ERROR received invalid/corrupted user id from server")
+	} else {
+		return UUID(userId)
+	}
+
+	return -1
 }
 
 func Disconnect(conn *websocket.Conn) {
