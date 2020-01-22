@@ -9,11 +9,17 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type Message struct {
+	conn *websocket.Conn
+	msg []byte
+}
+
 var (
 	host = flag.String("host", "localhost", "server hostname")
 	port = flag.String("port", "5003", "port on which server listens to")
 	upgrader = websocket.Upgrader{} // default configuration
 	clients = make(map[*websocket.Conn]string)
+	broadcastChan = make(chan Message, 100)
 )
 
 func closeConnection(conn *websocket.Conn) {
@@ -50,7 +56,25 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		log.Printf("recv: %s", msg)
+		broadcastChan <- Message{ conn, msg }
+	}
+}
+
+func composeBroadcastMessage(message Message) []byte {
+	return []byte(fmt.Sprintf("%s:%s", clients[message.conn], string(message.msg)))
+}
+
+func broadcastMessages() {
+	for {
+		msg := composeBroadcastMessage(<-broadcastChan)
+
+		for client := range clients {
+			err := client.WriteMessage(websocket.TextMessage, msg)
+			if err != nil {
+				log.Println("ERROR write:", err)
+				break
+			}
+		}
 	}
 }
 
@@ -60,6 +84,8 @@ func main() {
 	log.SetFlags(0)
 
 	http.HandleFunc("/echo", handleConnections)
+
+	go broadcastMessages()
 
 	addr := fmt.Sprintf("%s:%s", *host, *port)
 	log.Printf("Listening on %s", addr)
