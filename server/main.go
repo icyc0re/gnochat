@@ -40,11 +40,9 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		mt, msg, err := conn.ReadMessage()
 		if err != nil {
 			if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
-				log.Printf("Disconnect: %s", r.RemoteAddr)
 				conn.WriteMessage(mt, msg)
 				return
 			} else if websocket.IsUnexpectedCloseError(err) {
-				log.Printf("Disconnect: %s", r.RemoteAddr)
 				return
 			} else {
 				log.Println("ERROR read:", err)
@@ -53,11 +51,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		}
 
 		log.Printf("recv: %s", msg)
-		err = conn.WriteMessage(mt, msg)
-		if err != nil {
-			log.Println("ERROR write:", err)
-			break
-		}
 	}
 }
 
