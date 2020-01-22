@@ -13,7 +13,15 @@ var (
 	host = flag.String("host", "localhost", "server hostname")
 	port = flag.String("port", "5003", "port on which server listens to")
 	upgrader = websocket.Upgrader{} // default configuration
+	clients = make(map[*websocket.Conn]string)
 )
+
+func closeConnection(conn *websocket.Conn) {
+	conn.Close()
+
+	log.Printf("Disconnect: %s", clients[conn])
+	delete(clients, conn)
+}
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
 	log.Printf("New connection: %s", r.RemoteAddr)
@@ -24,7 +32,9 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	defer conn.Close()
+	defer closeConnection(conn)
+
+	clients[conn] = "username"
 
 	for {
 		mt, msg, err := conn.ReadMessage()
