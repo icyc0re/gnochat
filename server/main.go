@@ -26,10 +26,14 @@ type UserData struct {
 	username string
 }
 
+func acceptAnyOrigin(r *http.Request) bool {
+	return true
+}
+
 var (
 	host = flag.String("host", "localhost", "server hostname")
 	port = flag.String("port", "5003", "port on which server listens to")
-	upgrader = websocket.Upgrader{} // default configuration
+	upgrader = websocket.Upgrader{CheckOrigin: acceptAnyOrigin}
 	clients = make(map[UUID]UserData)
 	broadcastChan = make(chan SimpleMessage, 100)
 	maxId struct {
@@ -48,6 +52,10 @@ func closeConnection(uuid UUID) {
 
 func validUsername(username string) bool {
 	return !strings.Contains(username, ":")
+}
+
+func isEmptyMessage(msg string) bool {
+	return len(strings.Trim(string(msg), " \n")) == 0
 }
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
@@ -103,7 +111,9 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		broadcastChan <- SimpleMessage{ userId, username, string(msg) }
+		if strMessage := string(msg); !isEmptyMessage(strMessage) {
+			broadcastChan <- SimpleMessage{ userId, username, strMessage }
+		}
 	}
 }
 
